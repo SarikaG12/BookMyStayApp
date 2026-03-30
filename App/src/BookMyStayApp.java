@@ -1,21 +1,22 @@
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 /**
  * ============================================================
  * CLASS - Reservation
  * ============================================================
  *
- * Use Case 5: Booking Request (FIFO)
+ * Use Case 6: Reservation Confirmation & Room Allocation
  *
- * @version 5.0
+ * @version 6.0
  */
 class Reservation {
 
-    /** Name of the guest making the booking. */
     private String guestName;
-
-    /** Requested room type. */
     private String roomType;
 
     public Reservation(String guestName, String roomType) {
@@ -37,31 +38,26 @@ class Reservation {
  * CLASS - BookingRequestQueue
  * ============================================================
  *
- * Use Case 5: Booking Request (FIFO)
+ * Stores booking requests in FIFO order.
  *
- * @version 5.0
+ * @version 6.0
  */
 class BookingRequestQueue {
 
-    /** Queue that stores booking requests. */
     private Queue<Reservation> requestQueue;
 
-    /** Initializes empty queue */
     public BookingRequestQueue() {
         requestQueue = new LinkedList<>();
     }
 
-    /** Add request */
     public void addRequest(Reservation reservation) {
         requestQueue.offer(reservation);
     }
 
-    /** Get next request (FIFO) */
     public Reservation getNextRequest() {
         return requestQueue.poll();
     }
 
-    /** Check if queue not empty */
     public boolean hasPendingRequests() {
         return !requestQueue.isEmpty();
     }
@@ -69,43 +65,177 @@ class BookingRequestQueue {
 
 /**
  * ============================================================
- * MAIN CLASS - UseCase5BookingRequestQueue
+ * CLASS - RoomInventory
  * ============================================================
  *
- * Use Case 5: Booking Request (FIFO)
+ * Stores room availability.
  *
- * @version 5.0
+ * @version 6.0
+ */
+class RoomInventory {
+
+    private Map<String, Integer> roomAvailability;
+
+    public RoomInventory() {
+        roomAvailability = new HashMap<>();
+        initializeInventory();
+    }
+
+    private void initializeInventory() {
+        roomAvailability.put("Single", 5);
+        roomAvailability.put("Double", 3);
+        roomAvailability.put("Suite", 2);
+    }
+
+    public Map<String, Integer> getRoomAvailability() {
+        return roomAvailability;
+    }
+
+    public void updateAvailability(String roomType, int count) {
+        roomAvailability.put(roomType, count);
+    }
+}
+
+/**
+ * ============================================================
+ * CLASS - RoomAllocationService
+ * ============================================================
+ *
+ * Use Case 6: Reservation Confirmation & Room Allocation
+ *
+ * Description:
+ * This class is responsible for confirming
+ * booking requests and assigning rooms.
+ *
+ * It ensures:
+ * - Each room ID is unique
+ * - Inventory is updated immediately
+ * - No room is double-booked
+ *
+ * @version 6.0
+ */
+class RoomAllocationService {
+
+    /**
+     * Stores all allocated room IDs to
+     * prevent duplicate assignments.
+     */
+    private Set<String> allocatedRoomIds;
+
+    /**
+     * Stores assigned room IDs by room type.
+     *
+     * Key   -> Room type
+     * Value -> Set of assigned room IDs
+     */
+    private Map<String, Set<String>> assignedRoomsByType;
+
+    /**
+     * Initializes allocation tracking structures.
+     */
+    public RoomAllocationService() {
+        allocatedRoomIds = new HashSet<>();
+        assignedRoomsByType = new HashMap<>();
+    }
+
+    /**
+     * Confirms a booking request by assigning
+     * a unique room ID and updating inventory.
+     *
+     * @param reservation booking request
+     * @param inventory centralized room inventory
+     */
+    public void allocateRoom(Reservation reservation, RoomInventory inventory) {
+        String roomType = reservation.getRoomType();
+        Integer available = inventory.getRoomAvailability().get(roomType);
+
+        if (available != null && available > 0) {
+            String roomId = generateRoomId(roomType);
+
+            allocatedRoomIds.add(roomId);
+
+            assignedRoomsByType.putIfAbsent(roomType, new HashSet<>());
+            assignedRoomsByType.get(roomType).add(roomId);
+
+            inventory.updateAvailability(roomType, available - 1);
+
+            System.out.println("Booking confirmed for Guest: "
+                    + reservation.getGuestName()
+                    + ", Room ID: "
+                    + roomId);
+        } else {
+            System.out.println("No rooms available for Guest: "
+                    + reservation.getGuestName()
+                    + ", Requested Type: "
+                    + roomType);
+        }
+    }
+
+    /**
+     * Generates a unique room ID
+     * for the given room type.
+     *
+     * @param roomType type of room
+     * @return unique room ID
+     */
+    private String generateRoomId(String roomType) {
+        assignedRoomsByType.putIfAbsent(roomType, new HashSet<>());
+
+        int nextNumber = assignedRoomsByType.get(roomType).size() + 1;
+        String roomId = roomType + "-" + nextNumber;
+
+        while (allocatedRoomIds.contains(roomId)) {
+            nextNumber++;
+            roomId = roomType + "-" + nextNumber;
+        }
+
+        return roomId;
+    }
+}
+
+/**
+ * ============================================================
+ * MAIN CLASS - UseCase6RoomAllocationService
+ * ============================================================
+ *
+ * Use Case 6: Reservation Confirmation & Room Allocation
+ *
+ * Description:
+ * This class demonstrates how booking
+ * requests are confirmed and rooms
+ * are allocated safely.
+ *
+ * It consumes booking requests in FIFO
+ * order and updates inventory immediately.
+ *
+ * @version 6.0
  */
 public class BookMyStayApp {
 
+    /**
+     * Application entry point.
+     *
+     * @param args Command-line arguments
+     */
     public static void main(String[] args) {
 
-        // Header
-        System.out.println("Booking Request Queue");
+        System.out.println("Room Allocation Processing");
 
-        // Create queue
         BookingRequestQueue bookingQueue = new BookingRequestQueue();
+        RoomInventory inventory = new RoomInventory();
+        RoomAllocationService allocationService = new RoomAllocationService();
 
-        // Create reservations
         Reservation r1 = new Reservation("Abhi", "Single");
-        Reservation r2 = new Reservation("Subha", "Double");
+        Reservation r2 = new Reservation("Subha", "Single");
         Reservation r3 = new Reservation("Vanmathi", "Suite");
 
-        // Add to queue
         bookingQueue.addRequest(r1);
         bookingQueue.addRequest(r2);
         bookingQueue.addRequest(r3);
 
-        // Process in FIFO order
         while (bookingQueue.hasPendingRequests()) {
-            Reservation r = bookingQueue.getNextRequest();
-
-            System.out.println(
-                    "Processing booking for Guest: " +
-                            r.getGuestName() +
-                            ", Room Type: " +
-                            r.getRoomType()
-            );
+            Reservation reservation = bookingQueue.getNextRequest();
+            allocationService.allocateRoom(reservation, inventory);
         }
     }
 }
